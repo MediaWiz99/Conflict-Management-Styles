@@ -886,9 +886,18 @@
         let studentName = '';
         let surveyDate = '';
 
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('testDate').value = new Date().toISOString().split('T')[0];
-        });
+        // Robust auto-date initialization
+        function setTodayDate() {
+            var dateField = document.getElementById('testDate');
+            if (dateField) {
+                dateField.value = new Date().toISOString().split('T')[0];
+            }
+        }
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTodayDate();
+        }
+        document.addEventListener('DOMContentLoaded', setTodayDate);
+        window.addEventListener('load', setTodayDate);
 
         function startAssessment() {
             studentName = document.getElementById('studentName').value.trim();
@@ -989,6 +998,13 @@
             const secondaryStyle = sortedStyles[1][0];
             const primary = styleData[primaryStyle];
             const secondary = styleData[secondaryStyle];
+            
+            // Generate tracker code
+            const totalScore = scores.competing + scores.collaborating + scores.compromising + scores.avoiding + scores.accommodating;
+            const primaryPct = Math.round((scores[primaryStyle] / totalScore) * 100);
+            const styleClarity = primaryPct >= 30 ? 'Strong' : primaryPct >= 25 ? 'Moderate' : 'Balanced';
+            const styleAbbrev = { competing: 'Cm', collaborating: 'Cl', compromising: 'Co', avoiding: 'Av', accommodating: 'Ac' };
+            const trackerCode = 'CMA-' + styleAbbrev[primaryStyle] + styleAbbrev[secondaryStyle] + '-' + scores[primaryStyle];
 
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = `
@@ -1023,6 +1039,37 @@
                         <div class="icon">🕊️</div>
                         <h3>Accommodating</h3>
                         <div class="score">${scores.accommodating}</div>
+                    </div>
+                </div>
+
+                <!-- TRACKER SUMMARY SECTION -->
+                <div style="background: linear-gradient(135deg, #1a3a7a 0%, #00205B 100%); color: white; padding: 25px; border-radius: 14px; margin: 20px 0;">
+                    <h3 style="color: #C4A000; margin-bottom: 15px; font-size: 1.3em;">📋 Assessment Tracker Summary</h3>
+                    <p style="font-size: 0.9em; opacity: 0.9; margin-bottom: 15px;">Copy this code into your Assessment Tracker.</p>
+                    
+                    <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin-bottom: 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="font-size: 0.8em; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px;">Primary Style</div>
+                                <div style="font-size: 1.4em; font-weight: 700; color: #F5E6A3;">${primary.name}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.8em; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px;">Secondary Style</div>
+                                <div style="font-size: 1.4em; font-weight: 700; color: #F5E6A3;">${secondary.name}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.8em; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px;">Style Clarity</div>
+                                <div style="font-size: 1.2em; font-weight: 600;">${styleClarity} (${primaryPct}%)</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.8em; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px;">Assertiveness</div>
+                                <div style="font-size: 1.2em; font-weight: 600;">${primary.assertive}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 15px; padding: 12px; background: rgba(196, 160, 0, 0.3); border-radius: 8px; font-family: monospace; font-size: 1.1em; text-align: center;">
+                        <span style="opacity: 0.7;">Tracker Code:</span> <strong style="color: #F5E6A3; font-size: 1.2em;">${trackerCode}</strong>
                     </div>
                 </div>
 
@@ -1188,136 +1235,347 @@
         }
 
         function generatePDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const { scores, primaryStyle, secondaryStyle } = window.conflictResults;
-            const primary = styleData[primaryStyle];
-            const secondary = styleData[secondaryStyle];
+            var jsPDF = window.jspdf.jsPDF;
+            var doc = new jsPDF();
+            var scores = window.conflictResults.scores;
+            var primaryStyle = window.conflictResults.primaryStyle;
+            var secondaryStyle = window.conflictResults.secondaryStyle;
+            var primary = styleData[primaryStyle];
+            var secondary = styleData[secondaryStyle];
 
-            const chapmanBlue = [0, 32, 91];
-            const chapmanGold = [196, 160, 0];
-            const textDark = [26, 26, 46];
-            const textMuted = [100, 100, 110];
+            // Colors
+            var chapmanBlue = [0, 32, 91];
+            var chapmanGold = [196, 160, 0];
+            var textDark = [26, 26, 46];
+            var textMuted = [100, 100, 110];
+            var greenColor = [46, 125, 50];
+            var redColor = [198, 40, 40];
+            var blueColor = [21, 101, 192];
+            var orangeColor = [245, 124, 0];
+            var purpleColor = [94, 53, 177];
 
-            // Header
-            doc.setFillColor(...chapmanBlue);
-            doc.rect(0, 0, 210, 45, 'F');
+            // Style colors
+            var styleColors = {
+                competing: redColor,
+                collaborating: greenColor,
+                compromising: orangeColor,
+                avoiding: purpleColor,
+                accommodating: blueColor
+            };
+
+            // Tracker calculations
+            var styleAbbrev = { competing: 'Cm', collaborating: 'Cl', compromising: 'Co', avoiding: 'Av', accommodating: 'Ac' };
+            var trackerCode = 'CMA-' + styleAbbrev[primaryStyle] + styleAbbrev[secondaryStyle] + '-' + scores[primaryStyle];
+
+            // Helper function
+            function addWrappedText(text, x, startY, maxWidth, lineHeight) {
+                var lines = doc.splitTextToSize(text, maxWidth);
+                var currentY = startY;
+                for (var i = 0; i < lines.length; i++) {
+                    if (currentY > 275) { doc.addPage(); currentY = 20; }
+                    doc.text(lines[i], x, currentY);
+                    currentY += lineHeight;
+                }
+                return currentY;
+            }
+
+            // ===== PAGE 1 =====
+            doc.setFillColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
+            doc.rect(0, 0, 210, 42, 'F');
             doc.setFontSize(10);
             doc.setTextColor(255, 255, 255);
             doc.text('CHAPMAN UNIVERSITY', 105, 12, { align: 'center' });
             doc.setFontSize(9);
-            doc.setTextColor(...chapmanGold);
+            doc.setTextColor(chapmanGold[0], chapmanGold[1], chapmanGold[2]);
             doc.text('Argyros College of Business and Economics', 105, 18, { align: 'center' });
-            doc.setFontSize(18);
+            doc.setFontSize(16);
             doc.setTextColor(255, 255, 255);
-            doc.text('Conflict Management Style Assessment', 105, 30, { align: 'center' });
-            doc.setFontSize(10);
-            doc.text('Based on Thomas-Kilmann Conflict Mode Instrument', 105, 38, { align: 'center' });
-            doc.setFillColor(...chapmanGold);
-            doc.rect(0, 45, 210, 2, 'F');
+            doc.text('Conflict Management Style Assessment', 105, 28, { align: 'center' });
+            doc.setFontSize(9);
+            doc.text('Based on Thomas-Kilmann Conflict Mode Instrument', 105, 36, { align: 'center' });
+            doc.setFillColor(chapmanGold[0], chapmanGold[1], chapmanGold[2]);
+            doc.rect(0, 42, 210, 2, 'F');
 
-            let y = 55;
-            doc.setFontSize(11);
-            doc.setTextColor(...textDark);
-            doc.text(`Student: ${studentName}`, 20, y);
-            doc.text(`Date: ${new Date(surveyDate).toLocaleDateString()}`, 120, y);
+            var y = 52;
+            doc.setFontSize(10);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            doc.text('Student: ' + studentName, 20, y);
+            doc.text('Date: ' + new Date(surveyDate).toLocaleDateString(), 140, y);
             y += 10;
 
-            // Scores
-            doc.setFontSize(9);
-            doc.setTextColor(...textMuted);
-            doc.text(`Scores: Competing: ${scores.competing} | Collaborating: ${scores.collaborating} | Compromising: ${scores.compromising} | Avoiding: ${scores.avoiding} | Accommodating: ${scores.accommodating}`, 20, y);
-            y += 12;
-
-            // Primary Style
-            doc.setFillColor(...chapmanBlue);
-            doc.roundedRect(20, y, 170, 15, 3, 3, 'F');
-            doc.setFontSize(12);
+            // Primary Style Banner
+            var pColor = styleColors[primaryStyle];
+            doc.setFillColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
+            doc.roundedRect(20, y, 170, 18, 2, 2, 'F');
+            doc.setFontSize(14);
             doc.setTextColor(255, 255, 255);
-            doc.text(`PRIMARY: ${primary.name.toUpperCase()} ${primary.icon}`, 105, y + 10, { align: 'center' });
-            y += 22;
-
-            doc.setFontSize(11);
-            doc.setTextColor(...chapmanGold);
-            doc.text(`Assertiveness: ${primary.assertive} | Cooperativeness: ${primary.cooperative}`, 105, y, { align: 'center' });
-            y += 8;
+            doc.text('PRIMARY STYLE: ' + primary.name.toUpperCase(), 105, y + 12, { align: 'center' });
+            y += 24;
 
             doc.setFontSize(10);
-            doc.setTextColor(...textMuted);
-            doc.text(`Secondary: ${secondary.name}`, 105, y, { align: 'center' });
-            y += 12;
+            doc.setTextColor(chapmanGold[0], chapmanGold[1], chapmanGold[2]);
+            doc.text('Assertiveness: ' + primary.assertive + '  |  Cooperativeness: ' + primary.cooperative, 105, y, { align: 'center' });
+            y += 6;
+            doc.setFontSize(9);
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.text('Secondary Style: ' + secondary.name, 105, y, { align: 'center' });
+            y += 10;
+
+            // Score Distribution Box
+            doc.setFillColor(245, 247, 250);
+            doc.roundedRect(20, y, 170, 22, 2, 2, 'F');
+            doc.setFontSize(9);
+            doc.setTextColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
+            doc.text('STYLE SCORES (out of 12 each)', 25, y + 7);
+            doc.setFontSize(8);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            doc.text('Competing: ' + scores.competing, 25, y + 15);
+            doc.text('Collaborating: ' + scores.collaborating, 60, y + 15);
+            doc.text('Compromising: ' + scores.compromising, 100, y + 15);
+            doc.text('Avoiding: ' + scores.avoiding, 140, y + 15);
+            doc.text('Accommodating: ' + scores.accommodating, 25, y + 20);
+            y += 28;
+
+            // Tracker Code Box
+            doc.setFillColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
+            doc.roundedRect(20, y, 170, 10, 2, 2, 'F');
+            doc.setFontSize(8);
+            doc.setTextColor(255, 255, 255);
+            doc.text('Tracker: ' + trackerCode + '  |  Primary: ' + primary.name + '  |  Secondary: ' + secondary.name, 105, y + 7, { align: 'center' });
+            y += 16;
 
             // Description
-            doc.setFontSize(9);
-            doc.setTextColor(...textDark);
-            const descLines = doc.splitTextToSize(primary.description, 170);
-            descLines.forEach(line => { doc.text(line, 20, y); y += 5; });
-            y += 8;
+            doc.setFontSize(10);
+            doc.setTextColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
+            doc.text('YOUR PRIMARY STYLE', 20, y);
+            y += 5;
+            doc.setFontSize(8);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            y = addWrappedText(primary.description, 20, y, 170, 4);
+            y += 6;
 
             // When to Use
-            doc.setFontSize(11);
-            doc.setTextColor(...chapmanBlue);
-            doc.text('When to Use This Style', 20, y);
-            y += 7;
-            doc.setFontSize(9);
-            doc.setTextColor(...textDark);
-            primary.whenToUse.forEach(w => {
+            doc.setFontSize(10);
+            doc.setTextColor(greenColor[0], greenColor[1], greenColor[2]);
+            doc.text('WHEN TO USE THIS STYLE', 20, y);
+            y += 5;
+            doc.setFontSize(8);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            for (var i = 0; i < primary.whenToUse.length; i++) {
                 if (y > 270) { doc.addPage(); y = 20; }
-                const lines = doc.splitTextToSize(`• ${w}`, 165);
-                lines.forEach(line => { doc.text(line, 25, y); y += 5; });
-            });
-            y += 8;
+                var lines = doc.splitTextToSize('- ' + primary.whenToUse[i], 165);
+                for (var j = 0; j < lines.length; j++) {
+                    doc.text(lines[j], 25, y);
+                    y += 4;
+                }
+            }
+            y += 4;
 
             // When to Avoid
-            if (y > 220) { doc.addPage(); y = 20; }
-            doc.setFontSize(11);
-            doc.setTextColor(...chapmanBlue);
-            doc.text('When to Avoid This Style', 20, y);
-            y += 7;
-            doc.setFontSize(9);
-            doc.setTextColor(...textDark);
-            primary.whenToAvoid.forEach(w => {
+            doc.setFontSize(10);
+            doc.setTextColor(redColor[0], redColor[1], redColor[2]);
+            doc.text('WHEN TO AVOID THIS STYLE', 20, y);
+            y += 5;
+            doc.setFontSize(8);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            for (var i = 0; i < primary.whenToAvoid.length; i++) {
                 if (y > 270) { doc.addPage(); y = 20; }
-                const lines = doc.splitTextToSize(`• ${w}`, 165);
-                lines.forEach(line => { doc.text(line, 25, y); y += 5; });
-            });
-            y += 10;
+                var lines = doc.splitTextToSize('- ' + primary.whenToAvoid[i], 165);
+                for (var j = 0; j < lines.length; j++) {
+                    doc.text(lines[j], 25, y);
+                    y += 4;
+                }
+            }
+            y += 4;
 
-            // Reflection
-            if (y > 200) { doc.addPage(); y = 20; }
-            doc.setFillColor(...chapmanBlue);
+            // Overuse/Underuse
+            doc.setFontSize(9);
+            doc.setTextColor(orangeColor[0], orangeColor[1], orangeColor[2]);
+            doc.text('Overuse Risk: ', 20, y);
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            y = addWrappedText(primary.overuse, 50, y, 140, 4);
+            y += 2;
+            doc.setTextColor(purpleColor[0], purpleColor[1], purpleColor[2]);
+            doc.text('Underuse Risk: ', 20, y);
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            y = addWrappedText(primary.underuse, 52, y, 138, 4);
+
+            // ===== PAGE 2: SWOT and TKI Model =====
+            doc.addPage();
+            y = 20;
+
+            // SWOT Header
+            doc.setFillColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
+            doc.roundedRect(20, y, 170, 10, 2, 2, 'F');
+            doc.setFontSize(11);
+            doc.setTextColor(255, 255, 255);
+            doc.text('SWOT ANALYSIS - ' + primary.name + ' Style', 105, y + 7, { align: 'center' });
+            y += 18;
+
+            // SWOT Grid
+            var boxW = 82;
+            var boxH = 26;
+
+            // Strength
+            doc.setFillColor(232, 245, 233);
+            doc.roundedRect(20, y, boxW, boxH, 2, 2, 'F');
+            doc.setDrawColor(greenColor[0], greenColor[1], greenColor[2]);
+            doc.setLineWidth(0.5);
+            doc.line(20, y, 20, y + boxH);
+            doc.setFontSize(9);
+            doc.setTextColor(greenColor[0], greenColor[1], greenColor[2]);
+            doc.text('STRENGTH', 25, y + 7);
+            doc.setFontSize(7);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            var sText = primary.assertive + ' assertiveness, ' + primary.cooperative + ' cooperativeness provides clear approach';
+            var sLines = doc.splitTextToSize(sText, boxW - 10);
+            for (var i = 0; i < Math.min(sLines.length, 3); i++) {
+                doc.text(sLines[i], 25, y + 12 + (i * 4));
+            }
+
+            // Weakness
+            doc.setFillColor(255, 235, 238);
+            doc.roundedRect(108, y, boxW, boxH, 2, 2, 'F');
+            doc.setDrawColor(redColor[0], redColor[1], redColor[2]);
+            doc.line(108, y, 108, y + boxH);
+            doc.setFontSize(9);
+            doc.setTextColor(redColor[0], redColor[1], redColor[2]);
+            doc.text('WEAKNESS', 113, y + 7);
+            doc.setFontSize(7);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            var wLines = doc.splitTextToSize(primary.overuse.substring(0, 80), boxW - 10);
+            for (var i = 0; i < Math.min(wLines.length, 3); i++) {
+                doc.text(wLines[i], 113, y + 12 + (i * 4));
+            }
+
+            y += boxH + 5;
+
+            // Opportunity
+            doc.setFillColor(227, 242, 253);
+            doc.roundedRect(20, y, boxW, boxH, 2, 2, 'F');
+            doc.setDrawColor(blueColor[0], blueColor[1], blueColor[2]);
+            doc.line(20, y, 20, y + boxH);
+            doc.setFontSize(9);
+            doc.setTextColor(blueColor[0], blueColor[1], blueColor[2]);
+            doc.text('OPPORTUNITY', 25, y + 7);
+            doc.setFontSize(7);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            var oText = 'Develop flexibility with ' + secondary.name + ' as secondary approach';
+            var oLines = doc.splitTextToSize(oText, boxW - 10);
+            for (var i = 0; i < Math.min(oLines.length, 3); i++) {
+                doc.text(oLines[i], 25, y + 12 + (i * 4));
+            }
+
+            // Threat
+            doc.setFillColor(255, 243, 224);
+            doc.roundedRect(108, y, boxW, boxH, 2, 2, 'F');
+            doc.setDrawColor(orangeColor[0], orangeColor[1], orangeColor[2]);
+            doc.line(108, y, 108, y + boxH);
+            doc.setFontSize(9);
+            doc.setTextColor(orangeColor[0], orangeColor[1], orangeColor[2]);
+            doc.text('THREAT', 113, y + 7);
+            doc.setFontSize(7);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            var tLines = doc.splitTextToSize(primary.underuse.substring(0, 80), boxW - 10);
+            for (var i = 0; i < Math.min(tLines.length, 3); i++) {
+                doc.text(tLines[i], 113, y + 12 + (i * 4));
+            }
+
+            y += boxH + 12;
+
+            // TKI Model Explanation
+            doc.setFontSize(11);
+            doc.setTextColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
+            doc.text('THE FIVE CONFLICT STYLES', 20, y);
+            y += 8;
+
+            var styles = ['competing', 'collaborating', 'compromising', 'avoiding', 'accommodating'];
+            var styleLabels = {
+                competing: 'Competing (High Assert, Low Coop)',
+                collaborating: 'Collaborating (High Assert, High Coop)',
+                compromising: 'Compromising (Medium Assert, Medium Coop)',
+                avoiding: 'Avoiding (Low Assert, Low Coop)',
+                accommodating: 'Accommodating (Low Assert, High Coop)'
+            };
+
+            for (var s = 0; s < styles.length; s++) {
+                var style = styles[s];
+                var sColor = styleColors[style];
+                var isYourPrimary = (style === primaryStyle);
+                var isYourSecondary = (style === secondaryStyle);
+                
+                if (y > 260) { doc.addPage(); y = 20; }
+                
+                doc.setFontSize(8);
+                doc.setTextColor(sColor[0], sColor[1], sColor[2]);
+                var label = styleLabels[style] + ': ' + scores[style] + '/12';
+                if (isYourPrimary) label += ' [PRIMARY]';
+                if (isYourSecondary) label += ' [Secondary]';
+                doc.text(label, 25, y);
+                y += 6;
+            }
+
+            y += 8;
+
+            // Situational Guide
+            doc.setFontSize(10);
+            doc.setTextColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
+            doc.text('SITUATIONAL GUIDE', 20, y);
+            y += 6;
+            doc.setFontSize(7);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            var situations = [
+                'Competing: Quick decisions, emergencies, protecting vital interests',
+                'Collaborating: Both concerns important, need commitment, building relationships',
+                'Compromising: Time pressure, equal power, need temporary solution',
+                'Avoiding: Trivial issues, emotions high, need more information',
+                'Accommodating: Wrong issue, relationship more important, building goodwill'
+            ];
+            for (var i = 0; i < situations.length; i++) {
+                doc.text('- ' + situations[i], 25, y);
+                y += 5;
+            }
+
+            y += 8;
+
+            // Reflection Questions
+            doc.setFillColor(chapmanBlue[0], chapmanBlue[1], chapmanBlue[2]);
             doc.roundedRect(20, y, 170, 10, 2, 2, 'F');
             doc.setFontSize(10);
             doc.setTextColor(255, 255, 255);
             doc.text('REFLECTION QUESTIONS', 105, y + 7, { align: 'center' });
-            y += 18;
+            y += 16;
 
-            const reflectionQs = [
-                'Think of a recent conflict. Which style did you use? Was it effective?',
-                'Which conflict style do you use least? How might developing it help you?',
-                'How does your conflict style impact your effectiveness as a leader?',
-                'What situation this week could you handle using a different style?'
+            var reflectionQs = [
+                "Think of a recent conflict. Which style did you use? Was it effective?",
+                "What situations trigger you to use your primary style automatically?",
+                "Which conflict style do you use least? How might developing it help you?",
+                "How might your style be perceived by someone with a different style?",
+                "How does your conflict style impact your effectiveness as a leader?"
             ];
-            doc.setFontSize(9);
-            doc.setTextColor(...textDark);
-            reflectionQs.forEach((q, i) => {
-                if (y > 270) { doc.addPage(); y = 20; }
-                const lines = doc.splitTextToSize(`${i + 1}. ${q}`, 165);
-                lines.forEach(line => { doc.text(line, 25, y); y += 5; });
-                y += 4;
-            });
-
-            // Footer
-            const pageCount = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(8);
-                doc.setTextColor(...textMuted);
-                doc.text(`Page ${i} of ${pageCount}`, 105, 287, { align: 'center' });
-                doc.text('Chapman University • Argyros College of Business and Economics • MGMT 316', 105, 292, { align: 'center' });
+            doc.setFontSize(8);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            for (var i = 0; i < reflectionQs.length; i++) {
+                if (y > 275) { doc.addPage(); y = 20; }
+                var qLines = doc.splitTextToSize((i + 1) + '. ' + reflectionQs[i], 165);
+                for (var j = 0; j < qLines.length; j++) {
+                    doc.text(qLines[j], 25, y);
+                    y += 4;
+                }
+                y += 2;
             }
 
-            doc.save(`Conflict_Style_Assessment_${studentName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+            // Footer on all pages
+            var pageCount = doc.internal.getNumberOfPages();
+            for (var i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                doc.text('Page ' + i + ' of ' + pageCount, 105, 287, { align: 'center' });
+                doc.text('Chapman University - Argyros College of Business and Economics - MGMT 316', 105, 292, { align: 'center' });
+            }
+
+            doc.save('Conflict_Style_' + studentName.replace(/\s+/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf');
         }
 
         function restartAssessment() {
